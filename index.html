@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SafeScan AI - Full-Stack Threat Inspector</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen p-6 font-sans">
+  <div class="max-w-4xl mx-auto space-y-6">
+
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between border-b border-slate-800 pb-4">
+      <div>
+        <h1 class="text-2xl font-bold text-emerald-400">SafeScan AI Inspector</h1>
+        <p class="text-sm text-slate-400">Full-Stack Phishing & Scam Detection (FastAPI + Scikit-Learn + SQLite)</p>
+      </div>
+      <span class="mt-2 sm:mt-0 text-xs bg-slate-900 border border-slate-700 text-slate-300 px-3 py-1.5 rounded-full">
+        Status: AI Model Active
+      </span>
+    </div>
+
+    <!-- Live Analytics KPI Cards -->
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div class="bg-slate-900 p-4 rounded-xl border border-slate-800">
+        <p class="text-xs uppercase text-slate-400">Total Database Scans</p>
+        <p id="statTotal" class="text-2xl font-bold text-white mt-1">0</p>
+      </div>
+      <div class="bg-slate-900 p-4 rounded-xl border border-red-900/50">
+        <p class="text-xs uppercase text-red-400">Phishing Threats Flagged</p>
+        <p id="statThreats" class="text-2xl font-bold text-red-400 mt-1">0</p>
+      </div>
+      <div class="bg-slate-900 p-4 rounded-xl border border-emerald-900/50">
+        <p class="text-xs uppercase text-emerald-400">Safe Messages Verified</p>
+        <p id="statSafe" class="text-2xl font-bold text-emerald-400 mt-1">0</p>
+      </div>
+    </div>
+
+    <!-- Scanner Input Card -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-4">
+      <div class="flex items-center justify-between">
+        <label class="text-sm font-medium text-slate-300">Paste SMS, Email, or URL to inspect:</label>
+        <div class="space-x-2">
+          <button onclick="fillSample('scam')" class="text-xs bg-slate-800 hover:bg-slate-700 text-amber-300 px-2.5 py-1 rounded border border-slate-700">
+            Try Sample Scam
+          </button>
+          <button onclick="fillSample('safe')" class="text-xs bg-slate-800 hover:bg-slate-700 text-emerald-300 px-2.5 py-1 rounded border border-slate-700">
+            Try Safe Message
+          </button>
+        </div>
+      </div>
+
+      <textarea id="messageInput" rows="3"
+        class="w-full p-3 rounded-lg bg-slate-950 border border-slate-700 text-slate-100 focus:outline-none focus:border-emerald-400"
+        placeholder="Paste suspicious message or link here..."></textarea>
+
+      <button onclick="analyzeMessage()"
+        class="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-semibold px-6 py-2.5 rounded-lg transition">
+        Analyze with AI
+      </button>
+    </div>
+
+    <!-- Live Result Output -->
+    <div id="resultCard" class="hidden bg-slate-900 p-5 rounded-xl border border-slate-800 space-y-2">
+      <div class="flex items-center justify-between">
+        <div>
+          <p class="text-xs uppercase tracking-wider text-slate-400">Prediction Verdict</p>
+          <p id="verdictText" class="text-xl font-bold mt-0.5"></p>
+        </div>
+        <span id="scoreBadge" class="px-3.5 py-1.5 rounded-full text-sm font-semibold"></span>
+      </div>
+      <p id="triggerText" class="text-xs text-slate-400 pt-1 border-t border-slate-800"></p>
+    </div>
+
+    <!-- SQLite History Table -->
+    <div class="bg-slate-900 p-5 rounded-xl border border-slate-800">
+      <div class="flex items-center justify-between mb-4">
+        <h2 class="text-base font-semibold">Scan History (Stored in SQLite)</h2>
+        <button onclick="clearHistory()" class="text-xs text-slate-400 hover:text-red-400 transition">
+          Clear History
+        </button>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm text-slate-300">
+          <thead class="text-xs uppercase bg-slate-950 text-slate-400">
+            <tr>
+              <th class="p-3">Content</th>
+              <th class="p-3">Verdict</th>
+              <th class="p-3">Risk</th>
+              <th class="p-3">Detected Signals</th>
+              <th class="p-3">Timestamp</th>
+            </tr>
+          </thead>
+          <tbody id="historyTable" class="divide-y divide-slate-800"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    function fillSample(type) {
+      const box = document.getElementById("messageInput");
+      if (type === "scam") {
+        box.value = "URGENT: Your bank account KYC is suspended. Click http://bit.ly/verify-kyc immediately to avoid block.";
+      } else {
+        box.value = "Hey, are we still meeting at 5 PM today to review the Python data analytics report?";
+      }
+    }
+
+    async function analyzeMessage() {
+      const inputEl = document.getElementById("messageInput");
+      const content = inputEl.value.trim();
+      if (!content) return alert("Please enter a message or URL first.");
+
+      const response = await fetch("/api/scan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content })
+      });
+      const data = await response.json();
+
+      // Clear the textarea right after successful analysis request
+      inputEl.value = "";
+
+      const resultCard = document.getElementById("resultCard");
+      const verdictText = document.getElementById("verdictText");
+      const scoreBadge = document.getElementById("scoreBadge");
+      const triggerText = document.getElementById("triggerText");
+
+      resultCard.classList.remove("hidden");
+      verdictText.textContent = data.verdict;
+      scoreBadge.textContent = `Risk Score: ${data.risk_score}%`;
+      triggerText.textContent = `Detected Signals: ${data.triggers}`;
+
+      if (data.risk_score >= 50) {
+        verdictText.className = "text-xl font-bold text-red-400";
+        scoreBadge.className = "px-3.5 py-1.5 rounded-full text-sm font-semibold bg-red-950 text-red-300 border border-red-700";
+      } else {
+        verdictText.className = "text-xl font-bold text-emerald-400";
+        scoreBadge.className = "px-3.5 py-1.5 rounded-full text-sm font-semibold bg-emerald-950 text-emerald-300 border border-emerald-700";
+      }
+
+      loadHistory();
+    }
+
+    async function loadHistory() {
+      const response = await fetch("/api/history");
+      const data = await response.json();
+
+      document.getElementById("statTotal").textContent = data.stats.total;
+      document.getElementById("statThreats").textContent = data.stats.threats;
+      document.getElementById("statSafe").textContent = data.stats.safe;
+
+      const tbody = document.getElementById("historyTable");
+      if (data.history.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500">No scans recorded yet. Click "Try Sample Scam" above to test!</td></tr>`;
+        return;
+      }
+
+      tbody.innerHTML = data.history.map(item => `
+        <tr>
+          <td class="p-3 max-w-xs truncate" title="${item.content}">${item.content}</td>
+          <td class="p-3 font-medium ${item.risk_score >= 50 ? 'text-red-400' : 'text-emerald-400'}">${item.verdict}</td>
+          <td class="p-3">${item.risk_score}%</td>
+          <td class="p-3 text-xs text-slate-400">${item.triggers}</td>
+          <td class="p-3 text-xs text-slate-500">${item.scanned_at}</td>
+        </tr>
+      `).join("");
+    }
+
+    async function clearHistory() {
+      await fetch("/api/history", { method: "DELETE" });
+      document.getElementById("resultCard").classList.add("hidden");
+      loadHistory();
+    }
+
+    loadHistory();
+  </script>
+</body>
+</html>
